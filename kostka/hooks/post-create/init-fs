@@ -1,0 +1,26 @@
+#!/bin/sh
+set -e
+
+INITFS=/var/lib/machines/$1/init.fs
+mkdir -p $INITFS
+
+# install the poweroff service
+mkdir -p $INITFS/etc/systemd/system/multi-user.target.wants
+cat > $INITFS/etc/systemd/system/poweroff.service <<END
+[Unit]
+Description=Poweroff after first boot
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/systemctl poweroff
+END
+ln -s ../poweroff.service $INITFS/etc/systemd/system/multi-user.target.wants/poweroff.service
+
+mount -t overlay overlayfs -o lowerdir=/var/lib/machines/$2/fs,upperdir=$INITFS,workdir=/var/lib/machines/$1/workdir /var/lib/machines/$1/fs
+/usr/bin/systemd-nspawn --quiet --keep-unit --boot --directory=/var/lib/machines/$1/fs -M $1 --network-bridge=br0
+
+umount /var/lib/machines/$1/fs
+
+rm $INITFS/etc/systemd/system/multi-user.target.wants/poweroff.service
+rm $INITFS/etc/systemd/system/poweroff.service

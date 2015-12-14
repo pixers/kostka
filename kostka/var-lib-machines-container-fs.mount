@@ -1,0 +1,9 @@
+[Unit]
+Description=OverlayFS for {name}
+PartOf={name}.service
+
+[Mount]
+What=overlayfs
+Where=/var/lib/machines/{name}/fs
+Type=overlay
+Options=lowerdir=/var/lib/machines/{template}/fs:/var/lib/machines/{name}/init.fs,upperdir=/var/lib/machines/{name}/overlay.fs,workdir=/var/lib/machines/{name}/workdir
