@@ -1,26 +1,33 @@
 #!/bin/sh
 set -e
 
+if [ -z "$1" -o -z "$3" ]; then
+    echo "Usage: $0 CONTAINER TEMPLATE LOWERDIRS"
+    exit 1
+fi
+
 INITFS=/var/lib/machines/$1/init.fs
 mkdir -p $INITFS
 
 # install the poweroff service
-mkdir -p $INITFS/etc/systemd/system/multi-user.target.wants
+mkdir -p $INITFS/etc/systemd/system/default.target.wants
 cat > $INITFS/etc/systemd/system/poweroff.service <<END
 [Unit]
 Description=Poweroff after first boot
-After=multi-user.target
+After=default.target
 
 [Service]
 Type=oneshot
 ExecStart=/bin/systemctl poweroff
 END
-ln -s ../poweroff.service $INITFS/etc/systemd/system/multi-user.target.wants/poweroff.service
+ln -s ../poweroff.service $INITFS/etc/systemd/system/default.target.wants/poweroff.service
 
-mount -t overlay overlayfs -o lowerdir=/var/lib/machines/$2/fs,upperdir=$INITFS,workdir=/var/lib/machines/$1/workdir /var/lib/machines/$1/fs
-/usr/bin/systemd-nspawn --quiet --keep-unit --boot --directory=/var/lib/machines/$1/fs -M $1 --network-bridge=br0
+echo $1 > $INITFS/etc/hostname
+
+mount -t overlay overlayfs -o lowerdir=$3,upperdir=$INITFS,workdir=/var/lib/machines/$1/workdir /var/lib/machines/$1/fs
+/usr/bin/systemd-nspawn --quiet --keep-unit --boot --directory=/var/lib/machines/$1/fs -M $1 --network-bridge=br-lan
 
 umount /var/lib/machines/$1/fs
 
-rm $INITFS/etc/systemd/system/multi-user.target.wants/poweroff.service
+rm $INITFS/etc/systemd/system/default.target.wants/poweroff.service
 rm $INITFS/etc/systemd/system/poweroff.service

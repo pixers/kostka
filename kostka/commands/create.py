@@ -2,7 +2,7 @@ import click
 import os
 import sys
 import subprocess
-from ..utils import cli, run_hooks
+from ..utils import cli, run_hooks, Container
 from .update_sd_units import update_sd_units
 
 
@@ -46,6 +46,9 @@ def create(ctx, name, template):
         # The overlay might be left over from a previous container
         pass
 
-    ctx.invoke(update_sd_units, name=name, template=template)
-    run_hooks('post-create', name, template)
+    Container(name).dependencies = template.split(',')
+
+    ctx.invoke(update_sd_units, name=name)
+    lowerdirs = Container(name).mount_lowerdirs()
+    run_hooks('post-create', name, template, lowerdirs)
     print("Container {} has been successfully created.".format(name))

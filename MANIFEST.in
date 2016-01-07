@@ -1,0 +1,2 @@
+include kostka/*.service kostka/*.mount
+include kostka/hooks/*/*

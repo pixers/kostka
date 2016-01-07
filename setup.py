@@ -7,6 +7,8 @@ setup(
     include_package_data=True,
     install_requires=[
         'Click',
+        'requests',
+        'toposort',
     ],
     entry_points='''
         [console_scripts]

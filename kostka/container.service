@@ -13,6 +13,7 @@ After=var-lib-machines-{name}-fs.mount
 
 [Service]
 ExecStart=/usr/bin/systemd-nspawn --quiet --keep-unit --boot --directory=/var/lib/machines/{name}/fs -M {name} --network-bridge=br-lan
+ExecStop=/bin/machinectl poweroff {name}
 KillMode=mixed
 Type=notify
 RestartForceExitStatus=133
