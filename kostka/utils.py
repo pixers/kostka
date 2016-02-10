@@ -2,97 +2,37 @@ import subprocess
 import os
 import sys
 import click
-import json
-from toposort import toposort_flatten
+from .container import Container  # noqa -- reexport
 
 
-class cached_property(property):
-    def __init__(self, fget=None, fset=None, fdel=None, doc=None, **kwargs):
-        self.cached_value = {}
-        if fget:
-            if hasattr(fget, '__self__') and fget.__self__.__class__ == self.__class__:
-                fget = fget.__self__._fget
-            self._fget = fget
-            fget = self.fget_wrapper
+class BridgeType(click.ParamType):
+    name = '[mac:]bridge[:host_interface:guest_interface]'
 
-        if fset and fset != self.fset_wrapper:
-            if hasattr(fset, '__self__') and fset.__self__.__class__ == self.__class__:
-                fset = fset.__self__._fset
-            self._fset = fset
-            fset = self.fset_wrapper
-
-        super().__init__(fget=fget, fset=fset, fdel=None, doc=None, **kwargs)
-
-    def fget_wrapper(self, obj, *args, **kwargs):
-        if not hasattr(obj, '_cached_values'):
-            obj._cached_values = {}
-
-        name = self._fget.__name__
-
-        if name in obj._cached_values:
-            return obj._cached_values[name]
-        else:
-            obj._cached_values[name] = self._fget(obj, *args, **kwargs)
-            return obj._cached_values[name]
-
-    def fset_wrapper(self, obj, *args, **kwargs):
-        if not hasattr(obj, '_cached_values'):
-            obj._cached_values = {}
-
-        name = self._fget.__name__
-        obj._cached_values[name] = self._fset(obj, *args, **kwargs)
-        return obj._cached_values[name]
-
-
-class Container:
-    def __init__(self, name):
-        self.name = name
-
-    @cached_property
-    def manifest(self):
-        try:
-            with open('/var/lib/machines/{}/manifest'.format(self.name)) as f:
-                return json.loads(f.read())
-        except FileNotFoundError:
+    def convert(self, value, param, ctx):
+        value = value.split(':')
+        if len(value) == 1:
+            return {'bridge': value[0]}
+        if len(value) == 2:
             return {
-                "acKind": "ImageManifest",
-                "acVersion": "0.7.4",
-                "kostkaVersion": "0.0.1",
-                "name": self.name,
-                "dependencies": [
-                    {"imageName": "debian-jessie"}
-                ]
+                'mac': value[0],
+                'bridge': value[1]
             }
+        if len(value) == 3:
+            return {
+                'bridge': value[0],
+                'host': value[1],
+                'guest': value[2]
+            }
+        if len(value) == 4:
+            return {
+                'mac': value[0],
+                'bridge': value[1],
+                'host': value[2],
+                'guest': value[3]
+            }
+        raise ValueError('Wrong bridge format: {}'.format(value))
 
-    @manifest.setter
-    def manifest(self, manifest):
-        with open('/var/lib/machines/{}/manifest'.format(self.name), 'w') as f:
-            f.write(json.dumps(manifest, indent=2))
-
-    @cached_property
-    def dependencies(self):
-        return list(dependency['imageName'] for dependency in self.manifest['dependencies'])
-
-    @dependencies.setter
-    def dependencies(self, dependencies):
-        manifest = self.manifest
-        manifest['dependencies'] = list({"imageName": name} for name in dependencies)
-        self.manifest = manifest
-
-    def mount_lowerdirs(self):
-        # First, build a dependency graph in order to avoid duplicate entries
-        dependencies = {}
-        pending_deps = set(self.dependencies)
-        while len(pending_deps) > 0:
-            name = pending_deps.pop()
-            if name not in dependencies:
-                dependencies[name] = set(Container(name).dependencies)
-
-        # Then sort it topologically. The list is reversed, because overlayfs
-        # will check the mounts in order they are given, so the base fs has to
-        # be the last one.
-        dependencies = reversed(list(toposort_flatten(dependencies)))
-        return ':'.join('/var/lib/machines/{}/overlay.fs'.format(dep) for dep in dependencies)
+BRIDGE = BridgeType()
 
 
 @click.group()
@@ -113,7 +53,7 @@ def systemd_reload():
 
 def container_exists(name):
     return name == os.path.basename(name) \
-       and os.path.exists(os.path.join("/var/lib/machines", name))
+       and os.path.exists(os.path.join("/var/lib/machines", name, 'fs'))
 
 
 def require_existing_container(f):

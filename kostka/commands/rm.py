@@ -3,14 +3,15 @@ import sys
 import os
 import shutil
 import subprocess
-from ..utils import cli, require_existing_container, systemd_reload, run_hooks
+from ..utils import cli, require_existing_container, systemd_reload, run_hooks, Container
 
 
 @cli.command()
 @click.argument("name")
-@click.option("--data", is_flag=True, help="Remove the container's data")
+@click.option('--recursive', '-r', help="Also remove containers that depend on the removed container", is_flag=True)
+@click.pass_context
 @require_existing_container
-def rm(name, data):
+def rm(ctx, name, recursive):
     """ Removes a container """
 
     subprocess.call(['/bin/systemctl', 'stop', name])
@@ -21,6 +22,17 @@ def rm(name, data):
     mount_active = subprocess.call(['/bin/systemctl', 'is-active', mount_unit],
                                    stderr=subprocess.DEVNULL,
                                    stdout=subprocess.DEVNULL) == 0
+
+    children = list(filter(lambda c: name in c.dependencies, Container.all()))
+    if len(children) > 0:
+        if recursive:
+            for container in children:
+                ctx.invoke(rm, name=container.name, recursive=recursive)
+        else:
+            children = ', '.join(map(lambda c: c.name, children))
+            print("Container {} is in use by {}. Not removing.".format(name, children))
+            sys.exit(1)
+
     if mount_active:
         print("Unmounting the container's volume failed. Not removing.",
               file=sys.stderr)
@@ -36,11 +48,10 @@ def rm(name, data):
     except FileNotFoundError:
         pass
 
-    if data:
-        try:
-            shutil.rmtree('/var/lib/machines/{}'.format(name))
-        except FileNotFoundError:
-            pass
+    try:
+        shutil.rmtree('/var/lib/machines/{}'.format(name))
+    except FileNotFoundError:
+        pass
 
     systemd_reload()
 

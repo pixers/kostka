@@ -9,6 +9,7 @@ setup(
         'Click',
         'requests',
         'toposort',
+        'pystache',
     ],
     entry_points='''
         [console_scripts]

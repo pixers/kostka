@@ -2,15 +2,21 @@ import click
 import os
 import sys
 import subprocess
+<<<<<<< HEAD
 from ..utils import cli, run_hooks, Container
+=======
+from ..utils import cli, run_hooks, Container, BRIDGE
+>>>>>>> A lot of forgotten changes
 from .update_sd_units import update_sd_units
+from .rm import rm
 
 
 @cli.command()
 @click.argument("name")
 @click.option("--template", "-t", default="debian-jessie")
+@click.option("--bridge", "-b", multiple=True, type=BRIDGE)
 @click.pass_context
-def create(ctx, name, template):
+def create(ctx, name, template, bridge):
     if name != os.path.basename(name):
         print("Invalid name: {}".format(name), file=sys.stderr)
         sys.exit(1)
@@ -37,8 +43,8 @@ def create(ctx, name, template):
 
     run_hooks('pre-create', name, template)
 
-    os.mkdir("/var/lib/machines/{}".format(name))
     try:
+        os.mkdir("/var/lib/machines/{}".format(name))
         os.mkdir("/var/lib/machines/{}/fs".format(name))
         os.mkdir("/var/lib/machines/{}/overlay.fs".format(name))
         os.mkdir("/var/lib/machines/{}/workdir".format(name))
@@ -46,9 +52,28 @@ def create(ctx, name, template):
         # The overlay might be left over from a previous container
         pass
 
+<<<<<<< HEAD
     Container(name).dependencies = template.split(',')
 
     ctx.invoke(update_sd_units, name=name)
     lowerdirs = Container(name).mount_lowerdirs()
     run_hooks('post-create', name, template, lowerdirs)
     print("Container {} has been successfully created.".format(name))
+=======
+    container = Container(name)
+    container.dependencies = template.split(',')
+    try:
+        for br in bridge:
+            container.add_network(**br)
+
+        ctx.invoke(update_sd_units, name=name)
+        lowerdirs = Container(name).mount_lowerdirs()
+        run_hooks('post-create', name, template, lowerdirs)
+        print("Container {} has been successfully created.".format(name))
+    except ValueError as e:
+        print(e.args[1])
+        ctx.invoke(rm, name=name)
+    except:
+        ctx.invoke(rm, name=name)
+        raise
+>>>>>>> A lot of forgotten changes
