@@ -2,11 +2,7 @@ import click
 import os
 import sys
 import subprocess
-<<<<<<< HEAD
-from ..utils import cli, run_hooks, Container
-=======
 from ..utils import cli, run_hooks, Container, BRIDGE
->>>>>>> A lot of forgotten changes
 from .update_sd_units import update_sd_units
 from .rm import rm
 
@@ -52,14 +48,6 @@ def create(ctx, name, template, bridge):
         # The overlay might be left over from a previous container
         pass
 
-<<<<<<< HEAD
-    Container(name).dependencies = template.split(',')
-
-    ctx.invoke(update_sd_units, name=name)
-    lowerdirs = Container(name).mount_lowerdirs()
-    run_hooks('post-create', name, template, lowerdirs)
-    print("Container {} has been successfully created.".format(name))
-=======
     container = Container(name)
     container.dependencies = template.split(',')
     try:
@@ -76,4 +64,3 @@ def create(ctx, name, template, bridge):
     except:
         ctx.invoke(rm, name=name)
         raise
->>>>>>> A lot of forgotten changes
