@@ -12,7 +12,7 @@ Requires=var-lib-machines-{{mount_name}}-fs.mount
 After=var-lib-machines-{{mount_name}}-fs.mount
 
 [Service]
-ExecStart=/usr/bin/env setup-netns {{#bridges}} --bridge {{bridge}}:{{host}}:{{guest}}{{#guest_address}}:{{guest_address}}{{/guest_address}}{{/bridges}} systemd-nspawn --quiet --keep-unit --boot --directory=/var/lib/machines/{{name}}/fs -M {{name}}
+ExecStart=/usr/bin/env setup-netns {{#bridges}} --bridge {{bridge}}:{{host}}:{{guest}}{{#guest_address}}:{{guest_address}}{{/guest_address}}{{/bridges}} systemd-nspawn --quiet --capability=CAP_NET_ADMIN --keep-unit --boot --directory=/var/lib/machines/{{name}}/fs -M {{name}}
 ExecStop=/bin/machinectl poweroff {{name}}
 KillMode=mixed
 Type=notify
