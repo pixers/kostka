@@ -12,17 +12,8 @@ Requires=var-lib-machines-{{mount_name}}-fs.mount
 After=var-lib-machines-{{mount_name}}-fs.mount
 
 [Service]
-{{#bridges}}
-ExecStartPre=/sbin/ip link add {{host}} type veth peer name {{guest}}{{#guest_address}} address {{guest_address}}{{/guest_address}}
-{{/bridges}}
-{{#bridges}}
-ExecStartPre=/sbin/ip link set {{host}} up master {{bridge}}
-{{/bridges}}
-ExecStart=/usr/bin/env systemd-nspawn --quiet --keep-unit --boot --directory=/var/lib/machines/{{name}}/fs -M {{name}} --private-network{{#bridges}} --network-interface={{guest}}{{/bridges}}
+ExecStart=/usr/bin/env setup-netns {{#bridges}} --bridge {{bridge}}:{{host}}:{{guest}}{{#guest_address}}:{{guest_address}}{{/guest_address}}{{/bridges}} systemd-nspawn --quiet --keep-unit --boot --directory=/var/lib/machines/{{name}}/fs -M {{name}}
 ExecStop=/bin/machinectl poweroff {{name}}
-{{#bridges}}
-ExecStopPost=/sbin/ip link delete {{host}}
-{{/bridges}}
 KillMode=mixed
 Type=notify
 RestartForceExitStatus=133
