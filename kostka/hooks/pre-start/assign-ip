@@ -1,5 +1,0 @@
-#!/bin/sh
-
-if [ ! -f /var/lib/machines/$1/init.fs/etc/network/interfaces.d/host0 ]; then
-    kostka set-free-ip $1
-fi

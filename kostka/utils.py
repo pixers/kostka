@@ -2,6 +2,7 @@ import subprocess
 import os
 import sys
 import click
+import pkg_resources
 from .container import Container  # noqa -- reexport
 
 
@@ -77,10 +78,22 @@ def is_active(name):
 def run_hooks(type, *args):
     dirname = os.path.dirname(__file__)
     hooks_dir = os.path.join(dirname, 'hooks', type)
-    if not os.path.exists(hooks_dir):
-        return
+    dirs = [os.path.join(dirname, 'hooks', type),
+            os.path.join('/usr/lib/kostka/hooks', type),
+            os.path.join('/etc/kostka/hooks', type),]
+    hooks = []
+    for hooks_dir in dirs:
+        if not os.path.exists(hooks_dir):
+            continue
 
-    for path in sorted(os.listdir(hooks_dir)):
+        hooks += os.listdir(hooks_dir)
+
+    for ep in pkg_resources.iter_entry_points(group='kostka'):
+        path = os.path.join(ep.dist.location, ep.dist.key, 'hooks', type)
+        if os.path.exists(path):
+            hooks += os.listdir(hooks_dir)
+
+    for path in sorted(hooks):
         path = os.path.join(hooks_dir, path)
         if not os.path.isfile(path) or not os.access(path, os.X_OK):
             print("NOT running hook {path} "
