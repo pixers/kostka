@@ -25,7 +25,7 @@ ln -s ../poweroff.service $INITFS/etc/systemd/system/default.target.wants/powero
 echo $1 > $INITFS/etc/hostname
 
 mount -t overlay overlayfs -o lowerdir=$3,upperdir=$INITFS,workdir=/var/lib/machines/$1/workdir /var/lib/machines/$1/fs
-/usr/bin/systemd-nspawn --quiet --keep-unit --boot --directory=/var/lib/machines/$1/fs -M $1 --network-bridge=br-lan
+/usr/bin/systemd-nspawn --quiet --keep-unit --boot --directory=/var/lib/machines/$1/fs -M $1
 
 umount /var/lib/machines/$1/fs
 

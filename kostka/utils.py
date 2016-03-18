@@ -80,21 +80,20 @@ def run_hooks(type, *args):
     hooks_dir = os.path.join(dirname, 'hooks', type)
     dirs = [os.path.join(dirname, 'hooks', type),
             os.path.join('/usr/lib/kostka/hooks', type),
-            os.path.join('/etc/kostka/hooks', type),]
+            os.path.join('/etc/kostka/hooks', type), ]
     hooks = []
     for hooks_dir in dirs:
         if not os.path.exists(hooks_dir):
             continue
 
-        hooks += os.listdir(hooks_dir)
+        hooks += map(lambda f: os.path.join(hooks_dir, f), os.listdir(hooks_dir))
 
     for ep in pkg_resources.iter_entry_points(group='kostka'):
-        path = os.path.join(ep.dist.location, ep.dist.key, 'hooks', type)
+        path = os.path.join(ep.dist.location, ep.dist.key.replace('-', '_'), 'hooks', type)
         if os.path.exists(path):
-            hooks += os.listdir(hooks_dir)
+            hooks += map(lambda f: os.path.join(path, f), os.listdir(path))
 
     for path in sorted(hooks):
-        path = os.path.join(hooks_dir, path)
         if not os.path.isfile(path) or not os.access(path, os.X_OK):
             print("NOT running hook {path} "
                   "(`chmod +x {path}`?)".format(path=path), file=sys.stderr)
