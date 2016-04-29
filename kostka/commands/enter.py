@@ -14,7 +14,7 @@ def enter(name, cmd, host_net):
         sys.exit(1)
 
     if cmd == ():
-        cmd = ['bash', '-l']
+        cmd = ['/bin/bash', '-l']
     cmd = list(cmd)
 
     isolation_options = ['--mount', '--uts', '--ipc', '--pid', '--root', '--wd']
