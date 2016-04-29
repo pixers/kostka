@@ -11,8 +11,19 @@ setup(
         'toposort',
         'pystache',
     ],
-    entry_points='''
-        [console_scripts]
-        kostka=kostka.kostka:cli
-    ''',
+    entry_points={
+        'console_scripts': 'kostka = kostka.kostka:cli',
+        'kostka.create': [
+            'mount = kostka.mount:create',
+            'network = kostka.network:create',
+        ],
+        'kostka.update_sd_units': [
+            'mount = kostka.mount:update_sd_units',
+            'network = kostka.network:update_sd_units',
+        ],
+        'kostka.container': [
+            'mount = kostka.mount:MountContainer',
+            'network = kostka.network:NetworkContainer',
+        ],
+    },
 )

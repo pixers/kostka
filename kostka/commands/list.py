@@ -11,7 +11,8 @@ from ..utils import cli, container_exists
 def list_containers(json_output, status):
     machines = sorted(os.listdir('/var/lib/machines'))
     machines = list(filter(container_exists, machines))
-    max_name_length = max(map(len, machines))
+    if len(machines) > 0:
+        max_name_length = max(map(len, machines))
     result = {}
     for machine in machines:
         try:

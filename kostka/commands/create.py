@@ -2,23 +2,23 @@ import click
 import os
 import sys
 import subprocess
-from ..utils import cli, run_hooks, Container, BRIDGE
+from ..utils import cli, run_hooks, Container
 from .update_sd_units import update_sd_units
 from .rm import rm
+from ..plugins import extensible_command
 
 
 @cli.command()
+@extensible_command
 @click.argument("name")
-@click.option("--template", "-t", default="debian-jessie")
-@click.option("--bridge", "-b", multiple=True, type=BRIDGE)
 @click.pass_context
-def create(ctx, name, template, bridge):
+def create(ctx, name, extensions, **kwargs):
     if name != os.path.basename(name):
         print("Invalid name: {}".format(name), file=sys.stderr)
         sys.exit(1)
 
-    mount_path = "/etc/systemd/system/var-lib-machines-{}-fs.mount".format(name)
-    if os.path.exists(mount_path):
+    container = Container(name)
+    if container.exists():
         print("Container {} already exists.".format(name), file=sys.stderr)
         sys.exit(1)
 
@@ -37,26 +37,15 @@ def create(ctx, name, template, bridge):
               file=sys.stderr)
         sys.exit(1)
 
-    run_hooks('pre-create', name, template)
+    run_hooks('pre-create', name, kwargs['template'])
+
+    extensions(ctx, container, **kwargs)
 
     try:
-        os.mkdir("/var/lib/machines/{}".format(name))
-        os.mkdir("/var/lib/machines/{}/fs".format(name))
-        os.mkdir("/var/lib/machines/{}/overlay.fs".format(name))
-        os.mkdir("/var/lib/machines/{}/workdir".format(name))
-    except FileExistsError:
-        # The overlay might be left over from a previous container
-        pass
-
-    container = Container(name)
-    container.dependencies = template.split(',')
-    try:
-        for br in bridge:
-            container.add_network(**br)
 
         ctx.invoke(update_sd_units, name=name)
         lowerdirs = Container(name).mount_lowerdirs()
-        run_hooks('post-create', name, template, lowerdirs)
+        run_hooks('post-create', name, kwargs['template'], lowerdirs)
         print("Container {} has been successfully created.".format(name))
     except ValueError as e:
         print(e.args[1])

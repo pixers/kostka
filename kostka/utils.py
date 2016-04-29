@@ -3,37 +3,7 @@ import os
 import sys
 import click
 import pkg_resources
-from .container import Container  # noqa -- reexport
-
-
-class BridgeType(click.ParamType):
-    name = '[mac:]bridge[:host_interface:guest_interface]'
-
-    def convert(self, value, param, ctx):
-        value = value.split(':')
-        if len(value) == 1:
-            return {'bridge': value[0]}
-        if len(value) == 2:
-            return {
-                'mac': value[0],
-                'bridge': value[1]
-            }
-        if len(value) == 3:
-            return {
-                'bridge': value[0],
-                'host': value[1],
-                'guest': value[2]
-            }
-        if len(value) == 4:
-            return {
-                'mac': value[0],
-                'bridge': value[1],
-                'host': value[2],
-                'guest': value[3]
-            }
-        raise ValueError('Wrong bridge format: {}'.format(value))
-
-BRIDGE = BridgeType()
+from .container import Container
 
 
 @click.group()
@@ -53,8 +23,7 @@ def systemd_reload():
 
 
 def container_exists(name):
-    return name == os.path.basename(name) \
-       and os.path.exists(os.path.join("/var/lib/machines", name, 'fs'))
+    return Container(name).exists()
 
 
 def require_existing_container(f):
