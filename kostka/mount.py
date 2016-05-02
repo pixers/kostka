@@ -16,7 +16,8 @@ def create(ctx, container, template, **kwargs):
         # The overlay might be left over from a previous container
         pass
 
-    container.dependencies = template.split(',')
+    container.dependencies = ({'imageName': dep} for dep in template.split(','))
+
 
 def update_sd_units(container, service, *args):
     name = container.name
@@ -44,15 +45,16 @@ def update_sd_units(container, service, *args):
     unit['Requires'] += 'var-lib-machines-{}-fs.mount '.format(mount_name)
     unit['After'] += 'var-lib-machines-{}-fs.mount '.format(mount_name)
 
+
 class MountContainer:
     @property
     def dependencies(self):
-        return list(dependency['imageName'] for dependency in self.manifest['dependencies'])
+        return list(dependency for dependency in self.manifest['dependencies'])
 
     @dependencies.setter
     def dependencies(self, dependencies):
         manifest = self.manifest
-        manifest['dependencies'] = list({"imageName": name} for name in dependencies)
+        manifest['dependencies'] = list(name for name in dependencies)
         self.manifest = manifest
 
     def mounts(self):
@@ -83,33 +85,41 @@ class MountContainer:
             'Options': options,
             'Type': 'overlay'
         }]
-        
 
     def mount_lowerdirs(self):
         # First, build a dependency graph in order to avoid duplicate entries
         dependencies = {}
-        pending_deps = set(self.dependencies)
+
+        def dependency_path(dep):
+            path = dep.get('path', 'overlay.fs')
+            return os.path.join(dep['imageName'], path)
+
+        pending_deps = set(map(dependency_path, self.dependencies))
         while len(pending_deps) > 0:
-            name = pending_deps.pop()
+            path = pending_deps.pop()
+            name = path.split('/')[0]
             if name not in dependencies:
-                dependencies[name] = set(self.__class__(name).dependencies)
-                pending_deps |= dependencies[name]
+                dependencies[path] = set(map(dependency_path, self.__class__(name).dependencies))
+                pending_deps |= dependencies[path]
 
         # Then sort it topologically. The list is reversed, because overlayfs
         # will check the mounts in order they are given, so the base fs has to
         # be the last one.
         dependencies = reversed(list(toposort_flatten(dependencies)))
-        return ':'.join(os.path.join(self.metadata_dir, dep, 'overlay.fs') for dep in dependencies)
+        return ':'.join(os.path.join(self.metadata_dir, dep) for dep in dependencies)
 
     def default_manifest(self):
         super_dict = {}
         if hasattr(super(), 'default_manifest'):
             super_dict = super().default_manifest()
 
-        super_dict.update({
-            "dependencies": [
-                {"imageName": "debian-jessie"}
-            ],
-        })
+        if self.name == 'debian-jessie':
+            super_dict.update({"dependencies": []})
+        else:
+            super_dict.update({
+                "dependencies": [
+                    {"imageName": "debian-jessie"}
+                ],
+            })
 
         return super_dict

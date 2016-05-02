@@ -1,7 +1,4 @@
-import re
 import click
-import pystache
-import subprocess
 from configparser import SafeConfigParser
 from ..utils import cli, systemd_reload, require_existing_container, Container
 from ..plugins import extensible_command
