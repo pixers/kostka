@@ -25,9 +25,11 @@ def fork(ctx, name):
     while os.path.exists(os.path.join(container.path, 'overlay.fs-{}'.format(fork_number))):
         fork_number += 1
 
-    src = os.path.join(container.path, 'overlay.fs')
+    src = os.readlink(os.path.join(container.path, 'overlay.fs'))
     dst = os.path.join(container.path, 'overlay.fs-{}'.format(fork_number))
     subprocess.check_call(['cp', '-a', src, dst])
+    os.unlink(os.path.join(container.path, 'overlay.fs'))
+    os.symlink(dst, os.path.join(container.path, 'overlay.fs'))
 
     for cont in Container.all():
         modified = False

@@ -10,7 +10,8 @@ def create(ctx, container, template, **kwargs):
     try:
         os.mkdir("/var/lib/machines/{}".format(container.name))
         os.mkdir("/var/lib/machines/{}/fs".format(container.name))
-        os.mkdir("/var/lib/machines/{}/overlay.fs".format(container.name))
+        os.mkdir("/var/lib/machines/{}/overlay.fs-1".format(container.name))
+        os.symlink(os.path.join(container.path, 'overlay.fs-1'), os.path.join(container.path, 'overlay.fs'))
         os.mkdir("/var/lib/machines/{}/workdir".format(container.name))
     except FileExistsError:
         # The overlay might be left over from a previous container
@@ -91,7 +92,8 @@ class MountContainer:
         dependencies = {}
 
         def dependency_path(dep):
-            path = dep.get('path', 'overlay.fs')
+            container = self.__class__(dep['imageName'])
+            path = dep.get('path', os.readlink(os.path.join(container.path, 'overlay.fs')))
             return os.path.join(dep['imageName'], path)
 
         pending_deps = set(map(dependency_path, self.dependencies))
