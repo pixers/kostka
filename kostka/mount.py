@@ -99,7 +99,7 @@ class MountContainer:
         pending_deps = set(map(dependency_path, self.dependencies))
         while len(pending_deps) > 0:
             path = pending_deps.pop()
-            name = path.split('/')[0]
+            name = path.split('/')[-2]
             if name not in dependencies:
                 dependencies[path] = set(map(dependency_path, self.__class__(name).dependencies))
                 pending_deps |= dependencies[path]
