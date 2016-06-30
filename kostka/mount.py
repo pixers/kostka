@@ -45,6 +45,15 @@ def rm(container):
         pass
 
 
+def copy(container, new_container):
+    src = os.path.join(container.path, "overlay.fs")
+    src = os.readlink(src)
+    # We can assume it's overlay.fs-1, because it's a new container
+    dest = os.path.join(new_container.path, "overlay.fs-1")
+    os.rmdir(dest)
+    subprocess.check_call(['/bin/cp', '-a', src, dest])
+
+
 def update_sd_units(container, service, *args):
     name = container.name
     mount_name = escape_path(name)

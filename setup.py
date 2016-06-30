@@ -27,6 +27,9 @@ setup(
         ],
         'kostka.rm': [
             'mount = kostka.mount:rm',
-        ]
+        ],
+        'kostka.copy': [
+            'mount = kostka.mount:copy',
+        ],
     },
 )
