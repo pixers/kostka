@@ -1,8 +1,13 @@
 import click
 import os
+import sys
 import subprocess
 from configparser import SafeConfigParser
 from toposort import toposort_flatten
+
+
+def escape_path(path):
+    return subprocess.check_output(['systemd-escape', '-p', path]).strip().decode('utf-8')
 
 
 @click.option("--template", "-t", default="debian-jessie")
@@ -20,9 +25,29 @@ def create(ctx, container, template, **kwargs):
     container.dependencies = ({'imageName': dep} for dep in template.split(','))
 
 
+def rm(container):
+    mount_unit = escape_path(os.path.join(container.path, 'fs')) + '.mount'
+    subprocess.call(['/bin/systemctl', 'stop', mount_unit],
+                    stderr=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL)
+    mount_active = subprocess.call(['/bin/systemctl', 'is-active', mount_unit],
+                                   stderr=subprocess.DEVNULL,
+                                   stdout=subprocess.DEVNULL) == 0
+
+    if mount_active:
+        print("Unmounting the container's volume failed. Not removing.",
+              file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        os.remove('/etc/systemd/system/{}'.format(mount_unit))
+    except FileNotFoundError:
+        pass
+
+
 def update_sd_units(container, service, *args):
     name = container.name
-    mount_name = subprocess.check_output(['systemd-escape', '-p', name]).strip().decode('utf-8')
+    mount_name = escape_path(name)
 
     # Prepare the overlayfs mount unit
     mount = SafeConfigParser()

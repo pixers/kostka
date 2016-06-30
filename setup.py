@@ -25,5 +25,8 @@ setup(
             'mount = kostka.mount:MountContainer',
             'network = kostka.network:NetworkContainer',
         ],
+        'kostka.rm': [
+            'mount = kostka.mount:rm',
+        ]
     },
 )
