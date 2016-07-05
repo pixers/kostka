@@ -13,7 +13,6 @@ def escape_path(path):
 @click.option("--template", "-t", default="debian-jessie")
 def create(ctx, container, template, **kwargs):
     try:
-        os.mkdir("/var/lib/machines/{}".format(container.name))
         os.mkdir("/var/lib/machines/{}/fs".format(container.name))
         os.mkdir("/var/lib/machines/{}/overlay.fs-1".format(container.name))
         os.symlink(os.path.join(container.path, 'overlay.fs-1'), os.path.join(container.path, 'overlay.fs'))

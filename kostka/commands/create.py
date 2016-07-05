@@ -39,6 +39,7 @@ def create(ctx, name, extensions, **kwargs):
 
     run_hooks('pre-create', name, kwargs['template'])
 
+    os.mkdir("/var/lib/machines/{}".format(container.name))
     extensions(ctx, container, **kwargs)
 
     try:
