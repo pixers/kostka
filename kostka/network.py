@@ -33,6 +33,8 @@ BRIDGE = BridgeType()
 
 @click.option("--bridge", "-b", multiple=True, type=BRIDGE)
 def create(ctx, container, bridge, **kwargs):
+    if len(bridge) > 0:
+        container.manifest['networks'] = []
     for br in bridge:
         container.add_network(**br)
 
