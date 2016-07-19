@@ -6,20 +6,21 @@ from .enter import enter
 
 
 @cli.command(name='set-ip')
+@click.option('-i', '--interface', default='host0')
 @click.argument('name')
 @click.argument('cidr')
 @click.pass_context
 @require_existing_container
-def set_ip(ctx, name, cidr):
+def set_ip(ctx, name, cidr, interface):
     """ Sets an ip address for the container's veth interface """
     ip, netmask = cidr.split('/', 1)
 
     # We want it to work both for running and not running containers.
     # If the container is running, we have to set it's ip without rebooting it.
     if is_active(name):
-        ctx.invoke(enter, name=name, cmd=('ip', 'link', 'set', 'host0', 'up'))
-        ctx.invoke(enter, name=name, cmd=('ip', 'address', 'flush', 'dev', 'host0'))
-        ctx.invoke(enter, name=name, cmd=('ip', 'address', 'add', cidr, 'dev', 'host0'))
+        ctx.invoke(enter, name=name, cmd=('ip', 'link', 'set', interface, 'up'))
+        ctx.invoke(enter, name=name, cmd=('ip', 'address', 'flush', 'dev', interface))
+        ctx.invoke(enter, name=name, cmd=('ip', 'address', 'add', cidr, 'dev', interface))
 
     path = '/var/lib/machines/' + name
     if is_active('var-lib-machines-{}-fs.mount'.format(name)):
@@ -37,13 +38,13 @@ def set_ip(ctx, name, cidr):
         except FileExistsError:
             pass
 
-        with open('etc/network/interfaces.d/host0', 'w') as f:
+        with open('etc/network/interfaces.d/' + interface, 'w') as f:
             template = """
-            auto host0
-            iface host0 inet static
+            auto {interface}
+            iface {interface} inet static
                 address {ip}
                 netmask {netmask}
-            """.format(ip=ip, netmask=netmask)
+            """.format(ip=ip, netmask=netmask, interface=interface)
             template = re.sub(r"^ {8}", "", template, flags=re.MULTILINE).lstrip()
             f.write(template)
     finally:
