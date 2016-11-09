@@ -3,13 +3,14 @@ import click
 import os
 from ..utils import cli
 from ..container import Container
-from .update_sd_units import update_sd_units
+from .update_sd_units import all_units
 
 
 @cli.command()
 @click.argument('name')
+@click.option('--update', is_flag=True, help='Update dependencies of this container to their newest versions.')
 @click.pass_context
-def fork(ctx, name):
+def fork(ctx, name, update):
     """Create a new copy of the container's overlay and switch existing children to use it.
 
     The basic idea is to be able to update the container without affecting others that
@@ -27,7 +28,11 @@ def fork(ctx, name):
 
     src = os.readlink(os.path.join(container.path, 'overlay.fs'))
     dst = os.path.join(container.path, 'overlay.fs-{}'.format(fork_number))
-    subprocess.check_call(['cp', '-a', src, dst])
+    if update:
+        os.mkdir(dst)
+    else:
+        subprocess.check_call(['cp', '-a', src, dst])
+
     os.unlink(os.path.join(container.path, 'overlay.fs'))
     os.symlink(dst, os.path.join(container.path, 'overlay.fs'))
 
@@ -40,11 +45,17 @@ def fork(ctx, name):
             if 'path' in dependency:
                 continue
 
-            dependency['path'] = 'overlay.fs-{}'.format(fork_number)
+            dependency['path'] = 'overlay.fs-{}'.format(fork_number - 1)
             modified = True
 
         if modified:
             cont.manifest = cont.manifest
 
-    for cont in Container.all():
-        ctx.invoke(update_sd_units, name=cont.name)
+    if update:
+        for dependency in container.dependencies:
+            if 'path' in dependency:
+                del dependency['path']
+
+        container.manifest = container.manifest
+
+    all_units(ctx, 'all', True)

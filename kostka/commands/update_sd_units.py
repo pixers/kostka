@@ -1,5 +1,4 @@
 import click
-from configparser import SafeConfigParser
 from ..utils import cli, systemd_reload, require_existing_container, Container
 from ..plugins import extensible_command
 
@@ -8,7 +7,8 @@ def all_units(ctx, param, value):
     if not value:
         return
     for machine in Container.all():
-        ctx.invoke(update_sd_units, name=machine.name)
+        ctx.invoke(update_sd_units, name=machine.name, reload_sd=False)
+    systemd_reload()
     ctx.exit()
 
 
@@ -17,7 +17,7 @@ def all_units(ctx, param, value):
 @click.argument('name')
 @click.option("--all", "-a", is_flag=True, help="Update systemd units of all containers.", callback=all_units, is_eager=True, expose_value=False)
 @require_existing_container
-def update_sd_units(name, extensions):
+def update_sd_units(name, extensions, reload_sd=True):
     """ Recreate the systemd units for the container. """
 
     container = Container(name)
@@ -27,18 +27,18 @@ def update_sd_units(name, extensions):
         '--keep-unit',
         '--boot',
         '--directory={}/fs'.format(container.path),
+        '--tmpfs=/tmp',
         '-M {}'.format(name),
     ]
     capabilities = []
-    container_service = SafeConfigParser()
-    container_service.optionxform = str
+    container_service = {}
     container_service['Unit'] = {
         'Description': 'Container: {}'.format(name),
     }
 
     container_service['Service'] = {
         'ExecStart': 'systemd-nspawn {nspawn_args}',
-        'ExecStop': '/bin/machinectl stop {}'.format(name),
+        'ExecStop': '/bin/machinectl poweroff {}'.format(name),
         'KillMode': 'mixed',
         'Type': 'notify',
         'RestartForceExitStatus': '133',
@@ -57,6 +57,14 @@ def update_sd_units(name, extensions):
 
     # Prepare the container service
     with open("/etc/systemd/system/{}.service".format(name), 'w') as f:
-        container_service.write(f)
+        for (section_name, section) in container_service.items():
+            f.write('\n[{}]\n'.format(section_name))
+            for (name, value) in section.items():
+                if isinstance(value, list):
+                    for v in value:
+                        f.write("{}={}\n".format(name, v))
+                else:
+                    f.write("{}={}\n".format(name, value))
 
-    systemd_reload()
+    if reload_sd:
+        systemd_reload()
