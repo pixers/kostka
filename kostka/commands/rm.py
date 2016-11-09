@@ -26,7 +26,8 @@ def rm(ctx, name, recursive, extensions):
             print("Container {} is in use by {}. Not removing.".format(name, children))
             sys.exit(1)
 
-    subprocess.check_call(['/bin/systemctl', 'stop', name])
+    if os.path.exists('/etc/systemd/systemd/{}.service'.format(name)):
+        subprocess.check_call(['/bin/systemctl', 'stop', name])
     extensions(Container(name))
 
     try:
