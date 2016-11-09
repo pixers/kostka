@@ -21,4 +21,4 @@ def enter(name, cmd, host_net):
     if not host_net:
         isolation_options.append('--net')
 
-    subprocess.call(['nsenter', '-t', get_pid(name)] + isolation_options + cmd)
+    sys.exit(subprocess.call(['nsenter', '-t', get_pid(name)] + isolation_options + cmd))
