@@ -24,7 +24,7 @@ def create(ctx, container, template, **kwargs):
     container.dependencies = ({'imageName': dep} for dep in template.split(','))
 
 
-def rm(container):
+def umount(container):
     mount_unit = escape_path(os.path.join(container.path, 'fs')) + '.mount'
     subprocess.call(['/bin/systemctl', 'stop', mount_unit],
                     stderr=subprocess.DEVNULL,
@@ -38,10 +38,19 @@ def rm(container):
               file=sys.stderr)
         sys.exit(1)
 
+    return mount_unit
+
+
+def rm(container):
+    mount_unit = umount(container)
     try:
         os.remove('/etc/systemd/system/{}'.format(mount_unit))
     except FileNotFoundError:
         pass
+
+
+def stop(container):
+    umount(container)
 
 
 def copy(container, new_container):

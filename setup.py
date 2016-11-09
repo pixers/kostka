@@ -31,5 +31,8 @@ setup(
         'kostka.copy': [
             'mount = kostka.mount:copy',
         ],
+        'kostka.stop': [
+            'mount = kostka.mount:stop',
+        ],
     },
 )
