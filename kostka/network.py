@@ -48,6 +48,7 @@ def update_sd_units(container, service, nspawn_args, capabilities):
             args.append('--bridge {}:{}:{}:{}'.format(br['bridge'], br['host'], br['guest'], br['guest_address']))
         else:
             args.append('--bridge {}:{}:{}'.format(br['bridge'], br['host'], br['guest']))
+        service['Service'].get('ExecStopPost', []).append('/usr/bin/ip link del {}'.format(br['host']))
 
     service['Service']['ExecStart'] = '/usr/bin/env setup-netns ' + ' '.join(args) + ' ' + service['Service']['ExecStart']
 
