@@ -30,9 +30,9 @@ def create(ctx, name, extensions, **kwargs):
               "You can't create a container with the same name.".format(name),
               file=sys.stderr)
         sys.exit(1)
-    elif service_status != 3:
+    elif service_status not in (3,4):
         print("Something weird is going on with systemd "
-              "(`systemctl status {}` returned {} instead of 3). "
+              "(`systemctl status {}` returned {} instead of 3 or 4). "
               "I don't know what to do.".format(name, service_status),
               file=sys.stderr)
         sys.exit(1)
@@ -43,7 +43,6 @@ def create(ctx, name, extensions, **kwargs):
     extensions(ctx, container, **kwargs)
 
     try:
-
         ctx.invoke(update_sd_units, name=name)
         lowerdirs = Container(name).mount_lowerdirs()
         run_hooks('post-create', name, kwargs['template'], lowerdirs)
