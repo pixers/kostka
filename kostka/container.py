@@ -2,14 +2,15 @@ from .cached_property import cached_property
 import os
 import json
 from .plugins import extend_with
+from pathlib import Path
 
 
 class BaseContainer:
-    metadata_dir = '/var/lib/machines'
+    metadata_dir = Path('/var/lib/machines')
 
     def __init__(self, name):
         self.name = name
-        self.path = os.path.join(self.metadata_dir, self.name)
+        self.path = self.metadata_dir / self.name
 
     # For now, we assume that all containers have a directory in the metadata directory
     @classmethod

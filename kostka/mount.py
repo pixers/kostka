@@ -4,6 +4,7 @@ import sys
 import subprocess
 from configparser import SafeConfigParser
 from toposort import toposort_flatten
+from .oci import Image
 
 
 def escape_path(path):
@@ -104,7 +105,7 @@ class MountContainer:
         options = 'lowerdir={initfs}:{dependencies},upperdir={upperdir},workdir={workdir}'
         options = options.format(
             initfs=os.path.join(self.path, 'init.fs'),
-            dependencies=self.mount_lowerdirs(),
+            dependencies=':'.join(self.mount_lowerdirs()),
             upperdir=os.path.join(self.path, 'overlay.fs'),
             workdir=os.path.join(self.path, 'workdir')
         )
@@ -119,7 +120,7 @@ class MountContainer:
         options = 'lowerdir={dependencies},upperdir={initfs},workdir={workdir}'
         options = options.format(
             initfs=os.path.join(self.path, 'init.fs'),
-            dependencies=self.mount_lowerdirs(),
+            dependencies=':'.join(self.mount_lowerdirs()),
             workdir=os.path.join(self.path, 'workdir')
         )
         return [{
@@ -134,23 +135,33 @@ class MountContainer:
         dependencies = {}
 
         def dependency_path(dep):
-            container = self.__class__(dep['imageName'])
-            path = dep.get('path', os.readlink(os.path.join(container.path, 'overlay.fs')))
-            return os.path.join(dep['imageName'], path)
+            if ':' in dep['imageName']: # It's an image
+                return Image.download(dep['imageName'])
+            else: # It's a container
+                container = self.__class__(dep['imageName'])
+                path = dep.get('path', os.readlink(os.path.join(container.path, 'overlay.fs')))
+                return os.path.join(dep['imageName'], path)
 
         pending_deps = set(map(dependency_path, self.dependencies))
         while len(pending_deps) > 0:
             path = pending_deps.pop()
-            name = path.split('/')[-2]
-            if name not in dependencies:
-                dependencies[path] = set(map(dependency_path, self.__class__(name).dependencies))
-                pending_deps |= dependencies[path]
+            if isinstance(path, Image):
+                path.extract()
+                prev_layer = path.layers[-1].fs_path
+                for layer in reversed(path.layers[:-1]):
+                    dependencies[prev_layer] = {layer.fs_path}
+                    prev_layer = layer.fs_path
+            else:
+                name = path.split('/')[-2]
+                if name not in dependencies:
+                    dependencies[path] = set(map(dependency_path, self.__class__(name).dependencies))
+                    pending_deps |= dependencies[path]
 
         # Then sort it topologically. The list is reversed, because overlayfs
         # will check the mounts in order they are given, so the base fs has to
         # be the last one.
         dependencies = reversed(list(toposort_flatten(dependencies)))
-        return ':'.join(os.path.join(self.metadata_dir, dep) for dep in dependencies)
+        return (os.path.join(self.metadata_dir, dep) for dep in dependencies)
 
     def default_manifest(self):
         super_dict = {}
@@ -162,7 +173,6 @@ class MountContainer:
         else:
             super_dict.update({
                 "dependencies": [
-                    {"imageName": "debian-jessie"}
                 ],
             })
 

@@ -44,7 +44,7 @@ def create(ctx, name, extensions, **kwargs):
 
     try:
         ctx.invoke(update_sd_units, name=name)
-        lowerdirs = Container(name).mount_lowerdirs()
+        lowerdirs = ':'.join(Container(name).mount_lowerdirs())
         run_hooks('post-create', name, kwargs['template'], lowerdirs)
         print("Container {} has been successfully created.".format(name))
     except ValueError as e:

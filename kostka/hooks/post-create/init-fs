@@ -7,10 +7,11 @@ if [ -z "$1" -o -z "$3" ]; then
 fi
 
 INITFS=/var/lib/machines/$1/init.fs
+TARGET=cloud-init
 mkdir -p $INITFS
 
 # install the poweroff service
-mkdir -p $INITFS/etc/systemd/system/basic.target.wants
+mkdir -p $INITFS/etc/systemd/system
 cat > $INITFS/etc/systemd/system/poweroff.service <<END
 [Unit]
 Description=Poweroff after first boot
@@ -20,14 +21,20 @@ After=default.target
 Type=oneshot
 ExecStart=/bin/systemctl poweroff
 END
-ln -s ../poweroff.service $INITFS/etc/systemd/system/basic.target.wants/poweroff.service
 
 echo $1 > $INITFS/etc/hostname
 
 mount -t overlay overlayfs -o lowerdir=$3,upperdir=$INITFS,workdir=/var/lib/machines/$1/workdir /var/lib/machines/$1/fs
-/usr/bin/systemd-nspawn --quiet --boot --directory=/var/lib/machines/$1/fs -M $1 systemd.unit=basic.target
+if [ ! -d /var/lib/machines/$1/fs/lib/systemd/system/$TARGET.target ]; then
+    # Fall back to basic.target
+    TARGET=basic
+fi
+mkdir -p $INITFS/etc/systemd/system/$TARGET.target.wants
+ln -s ../poweroff.service $INITFS/etc/systemd/system/$TARGET.target.wants/poweroff.service
+
+/usr/bin/systemd-nspawn --quiet --boot --directory=/var/lib/machines/$1/fs -M $1 systemd.unit=$TARGET.target
 
 umount /var/lib/machines/$1/fs
 
-rm $INITFS/etc/systemd/system/basic.target.wants/poweroff.service
+rm $INITFS/etc/systemd/system/$TARGET.target.wants/poweroff.service
 rm $INITFS/etc/systemd/system/poweroff.service
