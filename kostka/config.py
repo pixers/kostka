@@ -1,5 +1,4 @@
 import yaml
-from pathlib import Path
 
 config = {
     'image_hub': None,
@@ -11,7 +10,8 @@ config = {
 }
 
 try:
-    yml = yaml.load(Path('/etc/kostka.yml').read_text())
+    with open('/etc/kostka.yml') as f:
+        yml = yaml.load(f.read())
     for (key, value) in yml.items():
         if key in config:
             config[key] = value

@@ -8,7 +8,8 @@ from .oci import Image
 
 
 def escape_path(path):
-    return subprocess.check_output(['systemd-escape', '-p', path]).strip().decode('utf-8')
+    cmd = ['systemd-escape', '-p', str(path)]
+    return subprocess.check_output(cmd).strip().decode('utf-8')
 
 
 @click.option("--template", "-t", default="debian-jessie")
@@ -16,7 +17,7 @@ def create(ctx, container, template, **kwargs):
     try:
         os.mkdir("/var/lib/machines/{}/fs".format(container.name))
         os.mkdir("/var/lib/machines/{}/overlay.fs-1".format(container.name))
-        os.symlink(os.path.join(container.path, 'overlay.fs-1'), os.path.join(container.path, 'overlay.fs'))
+        (container.path / 'overlay.fs').symlink_to(container.path / 'overlay.fs-1')
         os.mkdir("/var/lib/machines/{}/workdir".format(container.name))
     except FileExistsError:
         # The overlay might be left over from a previous container
@@ -26,7 +27,7 @@ def create(ctx, container, template, **kwargs):
 
 
 def umount(container):
-    mount_unit = escape_path(os.path.join(container.path, 'fs')) + '.mount'
+    mount_unit = escape_path(container.path / 'fs') + '.mount'
     subprocess.call(['/bin/systemctl', 'stop', mount_unit],
                     stderr=subprocess.DEVNULL,
                     stdout=subprocess.DEVNULL)
@@ -104,14 +105,14 @@ class MountContainer:
     def mounts(self):
         options = 'lowerdir={initfs}:{dependencies},upperdir={upperdir},workdir={workdir}'
         options = options.format(
-            initfs=os.path.join(self.path, 'init.fs'),
+            initfs=self.path / 'init.fs',
             dependencies=':'.join(self.mount_lowerdirs()),
-            upperdir=os.path.join(self.path, 'overlay.fs'),
-            workdir=os.path.join(self.path, 'workdir')
+            upperdir=self.path / 'overlay.fs',
+            workdir=self.path / 'workdir'
         )
         return [{
             'What': 'overlayfs',
-            'Where': os.path.join(self.path, 'fs'),
+            'Where': self.path / 'fs',
             'Options': options,
             'Type': 'overlay'
         }]
@@ -119,13 +120,13 @@ class MountContainer:
     def init_mounts(self):
         options = 'lowerdir={dependencies},upperdir={initfs},workdir={workdir}'
         options = options.format(
-            initfs=os.path.join(self.path, 'init.fs'),
+            initfs=self.path / 'init.fs',
             dependencies=':'.join(self.mount_lowerdirs()),
-            workdir=os.path.join(self.path, 'workdir')
+            workdir=self.path / 'workdir'
         )
         return [{
             'What': 'overlayfs',
-            'Where': os.path.join(self.path, 'fs'),
+            'Where': self.path / 'fs',
             'Options': options,
             'Type': 'overlay'
         }]
@@ -135,11 +136,11 @@ class MountContainer:
         dependencies = {}
 
         def dependency_path(dep):
-            if ':' in dep['imageName']: # It's an image
+            if ':' in dep['imageName']:  # It's an image
                 return Image.download(dep['imageName'])
-            else: # It's a container
+            else:  # It's a container
                 container = self.__class__(dep['imageName'])
-                path = dep.get('path', os.readlink(os.path.join(container.path, 'overlay.fs')))
+                path = dep.get('path', str((container.path / 'overlay.fs').resolve()))
                 return os.path.join(dep['imageName'], path)
 
         pending_deps = set(map(dependency_path, self.dependencies))
@@ -147,10 +148,11 @@ class MountContainer:
             path = pending_deps.pop()
             if isinstance(path, Image):
                 path.extract()
-                prev_layer = path.layers[-1].fs_path
+                prev_layer = str(path.layers[-1].fs_path)
+                dependencies[prev_layer] = set()
                 for layer in reversed(path.layers[:-1]):
-                    dependencies[prev_layer] = {layer.fs_path}
-                    prev_layer = layer.fs_path
+                    dependencies[prev_layer] = {str(layer.fs_path)}
+                    prev_layer = str(layer.fs_path)
             else:
                 name = path.split('/')[-2]
                 if name not in dependencies:

@@ -10,6 +10,8 @@ setup(
         'requests',
         'toposort',
         'pystache',
+        'pyyaml',
+        'tqdm',
     ],
     entry_points={
         'console_scripts': 'kostka = kostka.kostka:cli',

@@ -19,14 +19,14 @@ class BaseContainer:
             return container.name == os.path.basename(container.name) \
                and container.exists()
 
-        machines = sorted(os.listdir(cls.metadata_dir))
-        machines = list(cls(name) for name in machines)
+        machines = sorted(cls.metadata_dir.iterdir())
+        machines = list(cls(str(name)) for name in machines)
         machines = list(filter(exists, machines))
 
         return machines
 
     def exists(self):
-        return os.path.exists(self.manifest_path())
+        return self.manifest_path().exists()
 
     def default_manifest(self):
         super_dict = {}
@@ -40,19 +40,19 @@ class BaseContainer:
         return super_dict
 
     def manifest_path(self):
-        return os.path.join(self.metadata_dir, self.name, 'manifest')
+        return self.metadata_dir / self.name / 'manifest'
 
     @cached_property
     def manifest(self):
         try:
-            with open(self.manifest_path()) as f:
+            with self.manifest_path().open() as f:
                 return json.loads(f.read())
         except FileNotFoundError:
             return self.default_manifest()
 
     @manifest.setter
     def manifest(self, manifest):
-        with open(self.manifest_path(), 'w') as f:
+        with self.manifest_path().open('w') as f:
             f.write(json.dumps(manifest, indent=2))
         return manifest
 

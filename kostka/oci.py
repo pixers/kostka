@@ -1,26 +1,32 @@
 import json
-import io
 from pathlib import Path
 import hashlib
+from tempfile import TemporaryDirectory, NamedTemporaryFile
 import platform
 import subprocess
 import shutil
 import requests
 from .config import config
 
+
+class DownloadError(Exception):
+    pass
+
+
 class Blob:
     root = Path(config['blob_root'])
 
     @classmethod
     def from_dirs(cls, *directories):
-        (Blob.root / 'sha256').mkdir(exist_ok=True, parents=True)
-        dest = (Blob.root / 'tmp')
-        dest.mkdir()
         try:
+            (Blob.root / 'sha256').mkdir(parents=True)
+        except FileExistsError:
+            pass
+
+        with TemporaryDirectory(dir=str(Blob.root)) as dest:
             for directory in directories:
-                #copytree(directory, dest)
                 # Using rsync so that devices are also copied
-                subprocess.check_call(['rsync', '-aHAX', str(directory) + '/', dest])
+                subprocess.check_call(['rsync', '-aHAX', str(directory) + '/', str(dest)])
 
             tar = subprocess.Popen(['tar',
                 '--sort=name', '--owner=0', '--group=0',
@@ -33,28 +39,33 @@ class Blob:
             gzip = subprocess.Popen(['gzip', '-n', '-'], stdin=tar.stdout, stdout=subprocess.PIPE)
             tar.stdout.close()
 
-            with (Blob.root / 'tmp.tar.gz').open('wb') as f:
+            with NamedTemporaryFile(dir=str(Blob.root), delete=False) as f:
                 sha = hashlib.sha256()
                 while gzip.stdout.readable():
-                    chunk = gzip.stdout.read(1024*1024)
+                    chunk = gzip.stdout.read(1024 * 1024)
                     if len(chunk) == 0:
                         break
                     f.write(chunk)
                     sha.update(chunk)
                 digest = sha.hexdigest()
-                shutil.move(Blob.root / 'tmp.tar.gz', Blob.root / 'sha256' / digest)
-                return cls('sha256', digest)
-        finally:
-            shutil.rmtree(dest)
+                tmp_path = f.name
+            shutil.move(tmp_path, str(Blob.root / 'sha256' / digest))
+            return cls('sha256', digest)
 
     @classmethod
     def from_str(cls, content):
         if not isinstance(content, str):
-            content = json.dumps(content)
+            content = json.dumps(content, sort_keys=True)
+
+        try:
+            (Blob.root / 'sha256').mkdir(parents=True)
+        except FileExistsError:
+            pass
 
         sha = hashlib.sha256(content.encode('utf-8')).hexdigest()
         blob = cls('sha256', sha)
-        blob.path.write_text(content)
+        with blob.path.open('w') as f:
+            f.write(content)
         return blob
 
     def __init__(self, digest_alg, digest=None, root=None):
@@ -67,18 +78,25 @@ class Blob:
 
     def download(self, progressbar=True):
         from tqdm import tqdm
+        if not config['image_hub']:
+            raise KeyError('Image hub not configured. Cannot download image.')
         if self.path.exists():
-            return self # Do nothing if the blob is already downloaded
+            return self  # Do nothing if the blob is already downloaded
         url = '{}/blobs/{}/{}'.format(config['image_hub'], self.digest_alg, self.digest)
         req = requests.get(url, stream=True)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        if req.status_code != 200:
+            raise DownloadError('Failed to download {}. Status code: {}'.format(url, req.status_code))
+        try:
+            self.path.parent.mkdir(parents=True)
+        except FileExistsError:
+            pass
 
         total_size = int(req.headers.get('content-length', 0))
         try:
             if progressbar:
                 progressbar = tqdm(total=total_size, unit='B', unit_scale=True, leave=False)
             with self.path.open('wb') as f:
-                for chunk in req.iter_content(chunk_size=1024*1024):
+                for chunk in req.iter_content(chunk_size=1024 * 1024):
                     if progressbar:
                         progressbar.update(len(chunk))
                     f.write(chunk)
@@ -89,10 +107,11 @@ class Blob:
 
     def __len__(self):
         return (self.root / self.digest_alg / self.digest).stat().st_size
-    
+
     @property
     def path(self) -> Path:
         return self.root / self.digest_alg / self.digest
+
 
 class Layer(Blob):
     root = Path(config['layer_root'])
@@ -113,7 +132,8 @@ class Layer(Blob):
         if self.fs_path.exists():
             return
         self.fs_path.mkdir(parents=True)
-        shutil.unpack_archive(self.path, self.fs_path, 'gztar')
+        shutil.unpack_archive(str(self.path), str(self.fs_path), 'gztar')
+
 
 class ImageMeta(type):
     def __contains__(self, item):
@@ -121,8 +141,9 @@ class ImageMeta(type):
 
     def __iter__(self):
         for directory in Image.root.iterdir():
-            for version in Image.root.iterdir():
+            for version in directory.iterdir():
                 yield Image('{}:{}'.format(directory.name, version.name))
+
 
 class Image(metaclass=ImageMeta):
     root = Path(config['image_root'])
@@ -138,40 +159,51 @@ class Image(metaclass=ImageMeta):
         if hasattr(content, 'digest'):
             return 'sha256:' + content.digest
         if not isinstance(content, str):
-            content = json.dumps(content)
+            content = json.dumps(content, sort_keys=True)
         return 'sha256:' + hashlib.sha256(content.encode('utf-8')).hexdigest()
 
     @classmethod
     def descriptor(cls, type, content):
+        if not hasattr(content, 'digest') and not isinstance(content, str):
+            content = json.dumps(content, sort_keys=True)
         return {
             'mediaType': 'application/vnd.oci.image.{}'.format(type),
             'size': len(content),
             'digest': cls.digest(content),
         }
-    
+
     @classmethod
     def create(cls, name, version=None):
         return cls(name, version=None, create=True)
 
     @classmethod
-    def delete(cls, name):
-        shutil.rmtree(cls.root / name)
+    def delete(cls, name, version=None):
+        if version is None:
+            name, version = name.split(':', 1)
+        shutil.rmtree(str(cls.root / name / version))
 
     @classmethod
-    def download(cls, name, version, progressbar=True):
+    def download(cls, name, version=None, progressbar=True):
+        if not config['image_hub']:
+            raise KeyError('Image hub not configured. Cannot download image.')
+        if version is None:
+            name, version = name.split(':', 1)
         index_url = '{}/images/{}/{}/index.json'.format(config['image_hub'], name, version)
         index = requests.get(index_url).json()
 
+        if (Image.root / name / version).exists():
+            return cls(name, version).load()
         with cls(name, version, create=True) as image:
             manifest = image.blob(Blob(index['manifests'][0]['digest']).download())
-            manifest = json.loads(manifest.path.read_text())
+            print(manifest.path)
+            with manifest.path.open() as f:
+                manifest = json.loads(f.read())
 
             for layer in manifest['layers']:
                 blob = image.blob(Layer(layer['digest']).download(progressbar))
                 image.layers.append(blob)
 
             return image
-        
 
     def __init__(self, name, version=None, create=False, root=None):
         self.root = root or Image.root
@@ -185,17 +217,21 @@ class Image(metaclass=ImageMeta):
         if self.create:
             self.loaded = True
             self.path.mkdir(parents=True)
-            (self.path / 'blobs' / 'sha256').mkdir(parents=True, exist_ok=True)
+            try:
+                (self.path / 'blobs' / 'sha256').mkdir(parents=True)
+            except FileExistsError:
+                pass  # Because python 3.4 doesn't have exist_ok in Path.mkdir
 
     def load(self):
-        index = json.loads((self.path / 'index.json').read_text())
+        with (self.path / 'index.json').open() as f:
+            index = json.loads(f.read())
         manifest = Blob(index['manifests'][0]['digest'])
-        manifest = json.loads(manifest.path.read_text())
+        with manifest.path.open() as f:
+            manifest = json.loads(f.read())
         for layer in manifest['layers']:
             self.layers.append(Layer(layer['digest']))
         self.loaded = True
         return self
-        
 
     @property
     def index(self):
@@ -233,7 +269,7 @@ class Image(metaclass=ImageMeta):
         }
 
     def contentaddr(self, content):
-        alg, digest = self.digest(content).split(':',1)
+        alg, digest = self.digest(content).split(':', 1)
         return self.path / 'blobs' / alg / digest
 
     def blob(self, blob: Blob):
@@ -249,8 +285,10 @@ class Image(metaclass=ImageMeta):
         self.blob(Blob.from_str(self.manifest))
         self.blob(Blob.from_str(self.config))
 
-        (self.path / 'oci-layout').write_text(json.dumps(self.layout()))
-        (self.path / 'index.json').write_text(json.dumps(self.index))
+        with (self.path / 'oci-layout').open('w') as f:
+            f.write(json.dumps(self.layout(), sort_keys=True))
+        with (self.path / 'index.json').open('w') as f:
+            f.write(json.dumps(self.index, sort_keys=True))
 
     def __enter__(self):
         return self
@@ -270,6 +308,7 @@ class Image(metaclass=ImageMeta):
         '''Extracts layers so they can be used in a container'''
         for layer in self.layers:
             layer.extract()
+
 
 # This function is currently unused, because it can't copy special files, such as devices.
 def copytree(src, dest):
