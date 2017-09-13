@@ -29,8 +29,8 @@ class Blob:
                 subprocess.check_call(['rsync', '-aHAX', str(directory) + '/', str(dest)])
 
             tar = subprocess.Popen(['tar',
-                '--sort=name', '--owner=0', '--group=0',
-                '--numeric-owner', '-cp', '--directory={}'.format(dest),
+                '--sort=name', '--numeric-owner',
+                '-cp', '--directory={}'.format(dest),
                 '--mtime=2000-01-01 00:00Z', '.'
             ], stdout=subprocess.PIPE)
 
@@ -303,7 +303,7 @@ class Image(metaclass=ImageMeta):
         if not self.loaded:
             self.load()
 
-        blob = Layer.from_dirs(self.path, *directories)
+        blob = Layer.from_dirs(*directories)
         self.blob(blob)
         self.layers.append(blob)
 

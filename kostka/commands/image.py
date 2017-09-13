@@ -108,7 +108,7 @@ def upload(name):
         rsync_command += ['--rsh={}'.format(config['image_upload_ssh_command'])]
 
     subprocess.check_call(rsync_command + [
-        '-aPR', '{}/{}/index.json'.format(name, version),
+        '-aPR', '--chmod=755', '{}/{}/index.json'.format(name, version),
         '{}:images/'.format(config['image_upload_host'])], cwd=str(Image.root)
     )
 
@@ -117,6 +117,6 @@ def upload(name):
     blobs.append(Blob.from_str(image.config))
     files = ['{}/{}'.format(blob.digest_alg, blob.digest) for blob in blobs]
     subprocess.check_call(
-        rsync_command + ['-aPR'] + files +
+        rsync_command + ['-aPR', '--chmod=755'] + files +
         ['{}:blobs/'.format(config['image_upload_host'])], cwd=str(Blob.root)
     )
