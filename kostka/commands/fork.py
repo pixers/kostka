@@ -23,18 +23,18 @@ def fork(ctx, name, update):
     # overlay.fs-N doesn't exist.
     # This should probably be configurable in the future.
     fork_number = 1
-    while os.path.exists(os.path.join(container.path, 'overlay.fs-{}'.format(fork_number))):
+    while (container.path / 'overlay.fs-{}'.format(fork_number)).exists():
         fork_number += 1
 
-    src = os.readlink(os.path.join(container.path, 'overlay.fs'))
-    dst = os.path.join(container.path, 'overlay.fs-{}'.format(fork_number))
+    src = str((container.path / 'overlay.fs').resolve())
+    dst = str(container.path / 'overlay.fs-{}'.format(fork_number))
     if update:
         os.mkdir(dst)
     else:
         subprocess.check_call(['cp', '-a', src, dst])
 
-    os.unlink(os.path.join(container.path, 'overlay.fs'))
-    os.symlink(dst, os.path.join(container.path, 'overlay.fs'))
+    (container.path / 'overlay.fs').unlink()
+    (container.path / 'overlay.fs').symlink_to(dst)
 
     for cont in Container.all():
         modified = False
