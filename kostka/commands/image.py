@@ -112,7 +112,10 @@ def upload(name):
         '{}:images/'.format(config['image_upload_host'])], cwd=str(Image.root)
     )
 
-    files = ['{}/{}'.format(blob.digest_alg, blob.digest) for blob in image.layers]
+    blobs = image.layers[:]
+    blobs.append(Blob.from_str(image.manifest))
+    blobs.append(Blob.from_str(image.config))
+    files = ['{}/{}'.format(blob.digest_alg, blob.digest) for blob in blobs]
     subprocess.check_call(
         rsync_command + ['-aPR'] + files +
         ['{}:blobs/'.format(config['image_upload_host'])], cwd=str(Blob.root)

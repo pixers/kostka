@@ -189,13 +189,16 @@ class Image(metaclass=ImageMeta):
         if version is None:
             name, version = name.split(':', 1)
         index_url = '{}/images/{}/{}/index.json'.format(config['image_hub'], name, version)
-        index = requests.get(index_url).json()
+        with requests.get(index_url) as response:
+            if response.status_code != 200:
+                raise DownloadError('Failed to download {}. Status code: {}'.format(index_url, response.status_code))
+            index = response.json()
+
 
         if (Image.root / name / version).exists():
             return cls(name, version).load()
         with cls(name, version, create=True) as image:
             manifest = image.blob(Blob(index['manifests'][0]['digest']).download())
-            print(manifest.path)
             with manifest.path.open() as f:
                 manifest = json.loads(f.read())
 
