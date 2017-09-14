@@ -34,7 +34,7 @@ def create(container, name, force):
     try:
         with Image.create(name) as image:
             print("Created image {}. Adding layers.".format(name))
-            for layer in container.mount_lowerdirs():
+            for layer in reversed(list(container.mount_lowerdirs())):
                 print("Adding layer {}.".format(layer))
                 image.add_layer(layer)
             print("Adding layer {}.".format(container.path / 'overlay.fs'))
