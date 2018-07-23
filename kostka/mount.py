@@ -122,6 +122,9 @@ class MountContainer:
         self.manifest = manifest
 
     def mounts(self):
+        if len(self.manifest['dependencies']) == 0:
+            return []
+
         if (self.path / 'init.fs').exists():
             # Legacy container, has init.fs
             options = 'lowerdir={initfs}:{dependencies},upperdir={upperdir},workdir={workdir}'
