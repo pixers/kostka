@@ -12,10 +12,25 @@ def escape_path(path):
     return subprocess.check_output(cmd).strip().decode('utf-8')
 
 
-@click.option("--template", "-t", default="debian-jessie")
-def create(ctx, container, template, **kwargs):
+@click.option("--template", "-t", help="Container to use as a base filesystem. Deprecated - use --image instead.")
+@click.option("--image", "-i", help="Image to use as a base filesystem.")
+def create(ctx, container, template, image, **kwargs):
+    os.mkdir("/var/lib/machines/{}/fs".format(container.name))
+    container.dependencies = []
+    if image is not None:
+        for dep in image.split(','):
+            if ':' not in dep:
+                dep += ':latest'
+
+            name, version = dep.split(':')
+            index = Image.download_index(name, version)
+            version = index['annotations']['kostka.image.version']
+
+            container.dependencies += [{'image': name, 'version': version}]
+    elif template is None:
+        return
+
     try:
-        os.mkdir("/var/lib/machines/{}/fs".format(container.name))
         os.mkdir("/var/lib/machines/{}/overlay.fs-1".format(container.name))
         (container.path / 'overlay.fs').symlink_to(container.path / 'overlay.fs-1')
         os.mkdir("/var/lib/machines/{}/workdir".format(container.name))
@@ -23,7 +38,8 @@ def create(ctx, container, template, **kwargs):
         # The overlay might be left over from a previous container
         pass
 
-    container.dependencies = ({'imageName': dep} for dep in template.split(','))
+    if template is not None:
+        container.dependencies = ({'imageName': dep} for dep in template.split(','))
 
 
 def umount(container):
@@ -65,6 +81,9 @@ def copy(container, new_container):
 
 
 def update_sd_units(container, service, *args):
+    if len(container.dependencies) == 0:
+        return  # This container doesn't use overlayfs
+
     name = container.name
     mount_name = escape_path(name)
 
@@ -103,27 +122,22 @@ class MountContainer:
         self.manifest = manifest
 
     def mounts(self):
-        options = 'lowerdir={initfs}:{dependencies},upperdir={upperdir},workdir={workdir}'
-        options = options.format(
-            initfs=self.path / 'init.fs',
-            dependencies=':'.join(self.mount_lowerdirs()),
-            upperdir=self.path / 'overlay.fs',
-            workdir=self.path / 'workdir'
-        )
-        return [{
-            'What': 'overlayfs',
-            'Where': self.path / 'fs',
-            'Options': options,
-            'Type': 'overlay'
-        }]
-
-    def init_mounts(self):
-        options = 'lowerdir={dependencies},upperdir={initfs},workdir={workdir}'
-        options = options.format(
-            initfs=self.path / 'init.fs',
-            dependencies=':'.join(self.mount_lowerdirs()),
-            workdir=self.path / 'workdir'
-        )
+        if (self.path / 'init.fs').exists():
+            # Legacy container, has init.fs
+            options = 'lowerdir={initfs}:{dependencies},upperdir={upperdir},workdir={workdir}'
+            options = options.format(
+                initfs=self.path / 'init.fs',
+                dependencies=':'.join(self.mount_lowerdirs()),
+                upperdir=self.path / 'overlay.fs',
+                workdir=self.path / 'workdir'
+            )
+        else:
+            options = 'lowerdir={dependencies},upperdir={upperdir},workdir={workdir}'
+            options = options.format(
+                dependencies=':'.join(self.mount_lowerdirs()),
+                upperdir=self.path / 'overlay.fs',
+                workdir=self.path / 'workdir'
+            )
         return [{
             'What': 'overlayfs',
             'Where': self.path / 'fs',
@@ -136,6 +150,8 @@ class MountContainer:
         dependencies = {}
 
         def dependency_path(dep):
+            if 'image' in dep:
+                return Image.download(dep['image'], dep['version'])
             if ':' in dep['imageName']:  # It's an image
                 return Image.download(dep['imageName'])
             else:  # It's a container
@@ -170,12 +186,6 @@ class MountContainer:
         if hasattr(super(), 'default_manifest'):
             super_dict = super().default_manifest()
 
-        if self.name == 'debian-jessie':
-            super_dict.update({"dependencies": []})
-        else:
-            super_dict.update({
-                "dependencies": [
-                ],
-            })
+        super_dict.update({"dependencies": []})
 
         return super_dict

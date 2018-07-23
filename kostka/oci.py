@@ -183,7 +183,7 @@ class Image(metaclass=ImageMeta):
         shutil.rmtree(str(cls.root / name / version))
 
     @classmethod
-    def download(cls, name, version=None, progressbar=True):
+    def download_index(cls, name, version=None):
         if not config['image_hub']:
             raise KeyError('Image hub not configured. Cannot download image.')
         if version is None:
@@ -192,9 +192,11 @@ class Image(metaclass=ImageMeta):
         with requests.get(index_url) as response:
             if response.status_code != 200:
                 raise DownloadError('Failed to download {}. Status code: {}'.format(index_url, response.status_code))
-            index = response.json()
+            return response.json()
 
-
+    @classmethod
+    def download(cls, name, version=None, progressbar=True):
+        index = cls.download_index(name, version)
         if (Image.root / name / version).exists():
             return cls(name, version).load()
         with cls(name, version, create=True) as image:
@@ -212,6 +214,8 @@ class Image(metaclass=ImageMeta):
         self.root = root or Image.root
         if version is None:
             name, version = name.split(':', 1)
+        self.name = name
+        self._version = version
         self.path = self.root / name / version
         self.create = create
         self.layers = []
@@ -228,6 +232,9 @@ class Image(metaclass=ImageMeta):
     def load(self):
         with (self.path / 'index.json').open() as f:
             index = json.loads(f.read())
+        if 'annotations' in index and 'kostka.image.version' in index['annotations']:
+            self._version = index['annotations']['kostka.image.version']
+            self.path = self.root / self.name / self._version
         manifest = Blob(index['manifests'][0]['digest'])
         with manifest.path.open() as f:
             manifest = json.loads(f.read())
@@ -237,12 +244,22 @@ class Image(metaclass=ImageMeta):
         return self
 
     @property
+    def version(self):
+        if not self.loaded:
+            self.load()
+        return self._version
+
+    @property
     def index(self):
         if not self.loaded:
             self.load()
         return {
             'schemaVersion': 2,
             'manifests': [self.descriptor('manifest.v1+json', self.manifest)],
+            'annotations': {
+                'kostka.image.name': self.name,
+                'kostka.image.version': self.version
+            }
         }
 
     @property
