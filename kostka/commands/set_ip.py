@@ -3,6 +3,8 @@ import os
 import re
 from ..utils import cli, require_existing_container, is_active
 from .enter import enter
+from .mount import mount
+from pathlib import Path
 
 
 @cli.command(name='set-ip')
@@ -22,6 +24,9 @@ def set_ip(ctx, name, cidr, interface, gateway):
     path = '/var/lib/machines/' + name
     if is_active('var-lib-machines-{}-fs.mount'.format(name)):
         # Now if the overlayfs is mounted, we should use it:
+        path += '/fs'
+    elif not (Path(path) / 'init.fs').exists():
+        ctx.invoke(mount, name=name)
         path += '/fs'
     else:
         # Otherwise, use the overlay directly
