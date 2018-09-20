@@ -28,6 +28,7 @@ def update_sd_units(name, extensions, reload_sd=True):
         '--boot',
         '--directory={}/fs'.format(container.path),
         '--tmpfs=/tmp',
+        '--link-journal=host',
         '-M {}'.format(name),
     ]
     capabilities = []

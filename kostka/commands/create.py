@@ -11,8 +11,9 @@ from ..plugins import extensible_command
 @cli.command()
 @extensible_command
 @click.argument("name")
+@click.option('--reload-systemd/--no-reload-systemd', default=True)
 @click.pass_context
-def create(ctx, name, extensions, **kwargs):
+def create(ctx, name, extensions, reload_systemd, **kwargs):
     if name != os.path.basename(name):
         print("Invalid name: {}".format(name), file=sys.stderr)
         sys.exit(1)
@@ -43,7 +44,7 @@ def create(ctx, name, extensions, **kwargs):
     extensions(ctx, container, **kwargs)
 
     try:
-        ctx.invoke(update_sd_units, name=name)
+        ctx.invoke(update_sd_units, name=name, reload_sd=reload_systemd)
         run_hooks('post-create', name)
         print("Container {} has been successfully created.".format(name))
     except ValueError as e:

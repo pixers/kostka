@@ -9,6 +9,7 @@ fi
 
 FS=/var/lib/machines/$1/fs
 TARGET=cloud-init
+TARGET=basic
 
 kostka mount $1
 if [ ! -f $FS/etc/os-release ]; then
@@ -37,6 +38,7 @@ echo $1 > $FS/etc/hostname
 
 mkdir -p $FS/etc/systemd/system/$TARGET.target.wants
 ln -s ../poweroff.service $FS/etc/systemd/system/$TARGET.target.wants/poweroff.service
+cat /proc/sys/kernel/random/uuid | tr -d '-' > $FS/etc/machine-id
 
 /usr/bin/systemd-nspawn --quiet --boot --directory=$FS -M $1 systemd.unit=$TARGET.target
 

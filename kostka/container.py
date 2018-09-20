@@ -20,7 +20,7 @@ class BaseContainer:
                and container.exists()
 
         machines = sorted(cls.metadata_dir.iterdir())
-        machines = list(cls(str(name)) for name in machines)
+        machines = list(cls(str(name.name)) for name in machines)
         machines = list(filter(exists, machines))
 
         return machines

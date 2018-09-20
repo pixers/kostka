@@ -11,9 +11,10 @@ from ..plugins import extensible_command
 @extensible_command
 @click.argument("name")
 @click.option('--recursive', '-r', help="Also remove containers that depend on the removed container", is_flag=True)
+@click.option('--reload-systemd/--no-reload-systemd', default=True)
 @click.pass_context
 @require_existing_container
-def rm(ctx, name, recursive, extensions):
+def rm(ctx, name, recursive, extensions, reload_systemd):
     """ Removes a container """
 
     children = list(filter(lambda c: name in c.dependencies, Container.all()))
@@ -27,7 +28,8 @@ def rm(ctx, name, recursive, extensions):
             sys.exit(1)
 
     if os.path.exists('/etc/systemd/systemd/{}.service'.format(name)):
-        subprocess.check_call(['/bin/systemctl', 'stop', name])
+        subprocess.check_call(['/bin/systemctl', 'kill', name])
+        subprocess.check_call(['/bin/systemctl', 'kill', name])
     extensions(Container(name))
 
     try:
@@ -40,6 +42,7 @@ def rm(ctx, name, recursive, extensions):
     except FileNotFoundError:
         pass
 
-    systemd_reload()
+    if reload_systemd:
+        systemd_reload()
 
     run_hooks('post-rm', name)

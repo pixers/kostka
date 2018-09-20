@@ -51,7 +51,7 @@ def update_sd_units(container, service, nspawn_args, capabilities):
 
         if 'ExecStopPost' not in service['Service']:
             service['Service']['ExecStopPost'] = []
-        service['Service']['ExecStopPost'].append('/usr/bin/ip link del {}'.format(br['host']))
+        service['Service']['ExecStopPost'].append('/sbin/ip link del {}'.format(br['host']))
 
     service['Service']['ExecStart'] = '/usr/bin/env setup-netns ' + ' '.join(args) + ' ' + service['Service']['ExecStart']
 
