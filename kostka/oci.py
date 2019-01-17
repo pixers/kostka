@@ -196,6 +196,8 @@ class Image(metaclass=ImageMeta):
 
     @classmethod
     def download(cls, name, version=None, progressbar=True):
+        if version is None:
+            name, version = name.split(':', 1)
         index = cls.download_index(name, version)
         if (Image.root / name / version).exists():
             return cls(name, version).load()
